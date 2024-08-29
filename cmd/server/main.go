@@ -134,12 +134,24 @@ func (s *TrainService) assignSeat() string {
 	return ""
 }
 
+// Initialize the Tickets and Seats
+func initialize(trainService *TrainService) {
+	//Initialize for twenty seats
+	for i := 1; i <= 20; i++ {
+		seat := fmt.Sprintf("A%d", i)
+		trainService.Seats[seat] = ""
+	}
+
+}
+
 func main() {
 	// Create a TrainService instance
 	trainService := &TrainService{
 		Tickets: make(map[string]*train.Ticket),
 		Seats:   make(map[string]string),
 	}
+
+	initialize(trainService)
 
 	// Initialize gRPC server
 	lis, err := net.Listen("tcp", ":50051") // Choose your port
