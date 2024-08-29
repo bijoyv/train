@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 
-	train "github.com/bijoyv/train/proto"
+	train "github.com/bijoyv/train/pkg/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
