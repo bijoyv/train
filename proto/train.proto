@@ -1,0 +1,70 @@
+syntax = "proto3";
+
+package train;
+option go_package = "github.com/bijoyv/train/pkg/proto;train";
+
+service TrainService {
+    rpc PurchaseTicket (PurchaseTicketRequest) returns (PurchaseTicketResponse) {}
+    rpc GetTicket (GetTicketRequest) returns (GetTicketResponse) {}
+    rpc GetSeatsBySection (GetSeatsBySectionRequest) returns (GetSeatsBySectionResponse) {}
+    rpc RemoveUser (RemoveUserRequest) returns (RemoveUserResponse) {}
+    rpc ModifySeat (ModifySeatRequest) returns (ModifySeatResponse) {}
+}
+
+message Ticket {
+    string from = 1;
+    string to = 2;
+    User user = 3;
+    int32 price = 4;
+    string seat = 5;
+}
+
+message User {
+    string firstName = 1;
+    string lastName = 2;
+    string email = 3;
+}
+
+message PurchaseTicketRequest {
+    string from = 1;
+    string to = 2;
+    User user = 3;
+}
+
+message PurchaseTicketResponse {
+    Ticket ticket = 1;
+}
+
+message GetTicketRequest {
+    string email = 1;
+}
+
+message GetTicketResponse {
+    Ticket ticket = 1;
+}
+
+message GetSeatsBySectionRequest {
+    string section = 1;
+}
+
+message GetSeatsBySectionResponse {
+    map<string, string> seats = 1; 
+}
+
+message RemoveUserRequest {
+    string email = 1;
+}
+
+message RemoveUserResponse {
+    bool success = 1;
+}
+
+message ModifySeatRequest {
+    string email = 1;
+    string newSeat = 2;
+}
+
+message ModifySeatResponse {
+    bool success = 1;
+}
+
