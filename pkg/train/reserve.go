@@ -33,6 +33,7 @@ func (s *TrainService) PurchaseTicket(ctx context.Context, req *train.PurchaseTi
 	if req.User == nil || req.User.Email == "" {
 		return nil, fmt.Errorf("Invalid User Information")
 	}
+
 	seat := s.assignSeat()
 	if seat == "" {
 		return nil, fmt.Errorf("no seats available")
