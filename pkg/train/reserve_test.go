@@ -191,20 +191,9 @@ func TestTrainService(t *testing.T) {
 			t.Fatalf("PurchaseTicket failed: %v", err)
 		}
 
-		var newSeat string
-		for seat := range trainService.Seats {
-			if trainService.Seats[seat] == "" {
-				newSeat = seat
-				break
-			}
-		}
-
-		if newSeat == "" {
-			t.Fatal("No available seats for testing ModifySeat")
-		}
 		modifySeatReq := &train.ModifySeatRequest{
 			Email:   "carol.williams@example.com",
-			NewSeat: newSeat,
+			NewSeat: "A2",
 		}
 
 		res, err := trainService.ModifySeat(context.Background(), modifySeatReq)
@@ -224,8 +213,8 @@ func TestTrainService(t *testing.T) {
 		if err != nil {
 			t.Fatalf("GetTicket failed: %v", err)
 		}
-		if getTicketRes.Ticket.Seat != newSeat {
-			t.Errorf("Expected seat to be %s, got %s", newSeat, getTicketRes.Ticket.Seat)
+		if getTicketRes.Ticket.Seat != "A2" {
+			t.Errorf("Expected seat to be %s, got %s", "A2", getTicketRes.Ticket.Seat)
 		}
 	})
 
