@@ -9,8 +9,6 @@ import (
 
 // TrainService implements the grpc interface using CSP.
 type TrainService struct {
-	//	ticketsChan chan map[string]*train.Ticket // Channel for ticket operations
-	//	seatsChan   chan map[string]string        // Channel for seat operations
 	ops chan func(map[string]*train.Ticket, map[string]string)
 	train.UnimplementedTrainServiceServer
 }
@@ -59,6 +57,7 @@ func (s *TrainService) PurchaseTicket(ctx context.Context, req *train.PurchaseTi
 			return
 		}
 		if _, exists := tickets[req.User.Email]; exists {
+			seats[seat] = "" //reset the taken as we are not purchasing
 			result <- fmt.Errorf("ticket already exist for this user")
 			return
 		}
