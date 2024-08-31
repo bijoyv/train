@@ -72,7 +72,6 @@ func (s *TrainService) PurchaseTicket(ctx context.Context, req *train.PurchaseTi
 		}
 		tickets[req.User.Email] = ticket
 		seats[seat] = req.User.Email
-		result <- nil
 		resTicket <- ticket
 	}
 	select {
@@ -113,9 +112,9 @@ func (s *TrainService) GetSeatsBySection(ctx context.Context, req *train.GetSeat
 			if string(seat[0]) == req.Section {
 				result[seat] = email
 			}
-			seatc <- result
 
 		}
+		seatc <- result
 	}
 
 	result := <-seatc
