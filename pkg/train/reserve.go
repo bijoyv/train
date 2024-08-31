@@ -131,7 +131,8 @@ func (s *TrainService) RemoveUser(ctx context.Context, req *train.RemoveUserRequ
 			er <- fmt.Errorf("User %s not found with ticket", req.Email)
 			return
 		}
-		delete(seats, ticket.Seat)
+		//		delete(seats, ticket.Seat)
+		seats[ticket.Seat] = ""
 		delete(tickets, req.Email)
 
 		result <- true
