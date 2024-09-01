@@ -13,6 +13,7 @@ type TrainService struct {
 	train.UnimplementedTrainServiceServer
 }
 
+// This is for running a go routine to make the data local for synchronization
 func (s *TrainService) Run() {
 	tickets := make(map[string]*train.Ticket)
 	seats := initializeSeats()
@@ -22,6 +23,7 @@ func (s *TrainService) Run() {
 	}
 }
 
+// helper function to initialize seats for section A and B
 func initializeSeats() map[string]string {
 	seats := make(map[string]string)
 	for i := 1; i <= 20; i++ {
