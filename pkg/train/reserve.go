@@ -3,185 +3,150 @@ package reservation
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	train "github.com/bijoyv/train/pkg/proto"
 )
 
-// TrainService implements the grpc interface using CSP.
+// Define the gRPC service and message structures
 type TrainService struct {
-	ops chan func(map[string]*train.Ticket, map[string]string)
+	mu      sync.Mutex
+	Tickets map[string]*train.Ticket // Store tickets by user email
+	Seats   map[string]string        // Store seat assignments: "A1": "user@example.com"
 	train.UnimplementedTrainServiceServer
 }
 
-// This is for running a go routine to make the data local for synchronization
-func (s *TrainService) Run() {
-	tickets := make(map[string]*train.Ticket)
-	seats := initializeSeats()
+// Implement the gRPC service methods
+func (s *TrainService) PurchaseTicket(ctx context.Context, req *train.PurchaseTicketRequest) (*train.PurchaseTicketResponse, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-	for op := range s.ops {
-		op(tickets, seats)
+	// Basic validation
+	if req.User == nil || req.User.Email == "" {
+		return nil, fmt.Errorf("invalid user information")
 	}
+
+	// Check if a ticket already exists for this user
+	if _, exists := s.Tickets[req.User.Email]; exists {
+		return nil, fmt.Errorf("a ticket already exists for this user")
+	}
+
+	// Assign a seat (simple logic for demo)
+	seat := s.assignSeat()
+	if seat == "" {
+		return nil, fmt.Errorf("no seats available")
+	}
+
+	// Create the ticket
+	ticket := &train.Ticket{
+		From:  req.From,
+		To:    req.To,
+		User:  req.User,
+		Price: 20, // Fixed price for now
+		Seat:  seat,
+	}
+
+	// Store the ticket and seat assignment
+	s.Tickets[req.User.Email] = ticket
+	s.Seats[seat] = req.User.Email
+
+	return &train.PurchaseTicketResponse{Ticket: ticket}, nil
 }
 
-// helper function to initialize seats for section A and B
-func initializeSeats() map[string]string {
+func (s *TrainService) GetTicket(ctx context.Context, req *train.GetTicketRequest) (*train.GetTicketResponse, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	ticket, exists := s.Tickets[req.Email]
+	if !exists {
+		return nil, fmt.Errorf("ticket not found for user: %s", req.Email)
+	}
+	return &train.GetTicketResponse{Ticket: ticket}, nil
+}
+
+func (s *TrainService) GetSeatsBySection(ctx context.Context, req *train.GetSeatsBySectionRequest) (*train.GetSeatsBySectionResponse, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	seats := make(map[string]string)
-	for i := 1; i <= 20; i++ {
-		seats[fmt.Sprintf("A%d", i)] = ""
-		seats[fmt.Sprintf("B%d", i)] = ""
+	for seat, email := range s.Seats {
+		if string(seat[0]) == req.Section {
+			seats[seat] = email
+		}
 	}
-	return seats
+
+	return &train.GetSeatsBySectionResponse{Seats: seats}, nil
 }
 
-// helper function to assign seat
-func assignSeat(seats map[string]string) string {
+func (s *TrainService) RemoveUser(ctx context.Context, req *train.RemoveUserRequest) (*train.RemoveUserResponse, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-	for seat, taken := range seats {
-		if taken == "" {
-			seats[seat] = "taken" //mark the seat as occupied
+	ticket, exists := s.Tickets[req.Email]
+	if !exists {
+		return nil, fmt.Errorf("user not found: %s", req.Email)
+	}
+
+	// Remove seat assignment
+	s.Seats[ticket.Seat] = ""
+
+	// Remove ticket
+	delete(s.Tickets, req.Email)
+
+	return &train.RemoveUserResponse{Success: true}, nil
+}
+
+func (s *TrainService) ModifySeat(ctx context.Context, req *train.ModifySeatRequest) (*train.ModifySeatResponse, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	ticket, exists := s.Tickets[req.Email]
+	if !exists {
+		return nil, fmt.Errorf("user not found: %s", req.Email)
+	}
+
+	// Check if the new seat is available
+	if t, taken := s.Seats[req.NewSeat]; taken && t != "" {
+
+		return nil, fmt.Errorf("seat %s is already taken.", req.NewSeat)
+	}
+
+	// Update seat assignment
+	delete(s.Seats, ticket.Seat)
+	s.Seats[req.NewSeat] = req.Email
+
+	// Update ticket
+	ticket.Seat = req.NewSeat
+
+	return &train.ModifySeatResponse{Success: true}, nil
+}
+
+// Helper function for seat assignment (replace with your logic)
+func (s *TrainService) assignSeat() string {
+	for seat, taken := range s.Seats {
+		if taken != "taken" {
+			s.Seats[seat] = "taken" // Mark the seat as taken
 			return seat
 		}
 	}
 	return ""
 }
 
-// Implement grpc service methods
-func (s *TrainService) PurchaseTicket(ctx context.Context, req *train.PurchaseTicketRequest) (*train.PurchaseTicketResponse, error) {
-	if req.User == nil || req.User.Email == "" {
-		return nil, fmt.Errorf("Invalid User Information")
-	}
-	result := make(chan error, 1)
-	resTicket := make(chan *train.Ticket, 1)
-	s.ops <- func(tickets map[string]*train.Ticket, seats map[string]string) {
-		seat := assignSeat(seats)
-		if seat == "" {
-			result <- fmt.Errorf("no seats available")
-			return
-		}
-		if _, exists := tickets[req.User.Email]; exists {
-			seats[seat] = "" //reset the taken as we are not purchasing
-			result <- fmt.Errorf("ticket already exist for this user")
-			return
-		}
-
-		ticket := &train.Ticket{
-			From:  req.From,
-			To:    req.To,
-			User:  req.User,
-			Price: 20,
-			Seat:  seat,
-		}
-		tickets[req.User.Email] = ticket
-		seats[seat] = req.User.Email
-		resTicket <- ticket
-	}
-	select {
-	case er := <-result:
-		return nil, er
-	case tkt := <-resTicket:
-
-		return &train.PurchaseTicketResponse{Ticket: tkt}, nil
-	}
-}
-func (s *TrainService) GetTicket(ctx context.Context, req *train.GetTicketRequest) (*train.GetTicketResponse, error) {
-	er := make(chan error, 1)
-	resTicket := make(chan *train.Ticket, 1)
-	s.ops <- func(tickets map[string]*train.Ticket, seats map[string]string) {
-		ticket, exists := tickets[req.Email]
-		if !exists {
-			er <- fmt.Errorf("Ticket not found for user %s", req.Email)
-			return
-		}
-		resTicket <- ticket
-
-	}
-
-	select {
-	case e := <-er:
-		return nil, e
-	case t := <-resTicket:
-
-		return &train.GetTicketResponse{Ticket: t}, nil
-	}
-}
-func (s *TrainService) GetSeatsBySection(ctx context.Context, req *train.GetSeatsBySectionRequest) (*train.GetSeatsBySectionResponse, error) {
-
-	seatc := make(chan map[string]string, 1)
-	s.ops <- func(tickets map[string]*train.Ticket, seats map[string]string) {
-		result := make(map[string]string)
-		for seat, email := range seats {
-			if string(seat[0]) == req.Section {
-				result[seat] = email
-			}
-
-		}
-		seatc <- result
-	}
-
-	result := <-seatc
-	return &train.GetSeatsBySectionResponse{Seats: result}, nil
-}
-
-func (s *TrainService) RemoveUser(ctx context.Context, req *train.RemoveUserRequest) (*train.RemoveUserResponse, error) {
-	er := make(chan error, 1)
-	result := make(chan bool, 1)
-
-	s.ops <- func(tickets map[string]*train.Ticket, seats map[string]string) {
-
-		ticket, exists := tickets[req.Email]
-		if !exists {
-			er <- fmt.Errorf("User %s not found with ticket", req.Email)
-			return
-		}
-		//		delete(seats, ticket.Seat)
-		seats[ticket.Seat] = ""
-		delete(tickets, req.Email)
-
-		result <- true
-	}
-	select {
-	case e := <-er:
-		return nil, e
-	case <-result:
-
-		return &train.RemoveUserResponse{Success: true}, nil
-	}
-}
-
-func (s *TrainService) ModifySeat(ctx context.Context, req *train.ModifySeatRequest) (*train.ModifySeatResponse, error) {
-	er := make(chan error, 1)
-	result := make(chan bool, 1)
-
-	s.ops <- func(tickets map[string]*train.Ticket, seats map[string]string) {
-
-		ticket, exists := tickets[req.Email]
-		if !exists {
-			er <- fmt.Errorf("user %s not found with ticket", req.Email)
-			return
-		}
-		if seat, taken := seats[req.NewSeat]; taken && seat != "" {
-			er <- fmt.Errorf("seat %s already in use", seat)
-			return
-		}
-		delete(seats, ticket.Seat)
-		seats[req.NewSeat] = req.Email
-		ticket.Seat = req.NewSeat
-		result <- true
-	}
-	select {
-	case e := <-er:
-		return nil, e
-	case <-result:
-		return &train.ModifySeatResponse{Success: true}, nil
-	}
-
-}
-
-// initialize the service
+// Initialize the Tickets and Seats
 func NewTrainReservationService() *TrainService {
+
 	ts := &TrainService{
-		ops: make(chan func(map[string]*train.Ticket, map[string]string)),
+		Tickets: make(map[string]*train.Ticket),
+		Seats:   make(map[string]string),
 	}
-	go ts.Run()
+	//Initialize for twenty seats
+	for i := 1; i <= 20; i++ {
+		seat := fmt.Sprintf("A%d", i)
+		ts.Seats[seat] = ""
+	}
+	for i := 1; i <= 20; i++ {
+		seat := fmt.Sprintf("B%d", i)
+		ts.Seats[seat] = ""
+	}
 	return ts
 }
