@@ -84,7 +84,7 @@ go run cmd/client/main.go --cmd=<command> [options]
   ```
   Example:
   ```bash
-  go run cmd/client/main.go --cmd=getseats --section=FirstClass
+  go run cmd/client/main.go --cmd=getseats --section=A
   ```
 
 - **removeuser**: Remove a user by email.
